@@ -23,10 +23,10 @@ def curriculum_decay(step):
         decay_height = np.exp(CURRICULUM_DECAY / step) + .1  # start at height 0 and increase each episode
         INIT_Y = np.random.normal(decay_height, .3)
         INIT_Y = np.clip(INIT_Y, .1, .95)
-        INIT_X = .31 * (INIT_Y ** 2)
-        return C.init(INIT_X = INIT_X, INIT_Y = INIT_Y)
+        INIT_X = .31 * (INIT_Y ** 2) * np.random.choice([1, -1])
+        return C(INIT_X = INIT_X, INIT_Y = INIT_Y)
     else:
-        return C.init()
+        return C()
 
 
 def _plot_curriculum_decay():
@@ -56,30 +56,30 @@ class C:
                  VEL_STATE: bool = None,
                  FPS: int = None,
                  SCALE_S: float = None,
-
                  INITIAL_RANDOM: float = None,
+
                  INIT_X: float = None,
                  INIT_Y: float = None,
-                 START_HEIGHT: float = None,
 
+                 START_HEIGHT: float = None,
                  START_SPEED: float = None,
+
                  MIN_THROTTLE: float = None,
                  GIMBAL_THRESHOLD: float = None,
-
                  MAIN_ENGINE_POWER: float = None,
                  SIDE_ENGINE_POWER: float = None,
-                 ROCKET_WIDTH: float = None,
 
+                 ROCKET_WIDTH: float = None,
                  ROCKET_HEIGHT: float = None,
                  ENGINE_HEIGHT: float = None,
                  ENGINE_WIDTH: float = None,
-
                  THRUSTER_HEIGHT: float = None,
+
                  LEG_LENGTH: float = None,
                  BASE_ANGLE: float = None,
-
                  SPRING_ANGLE: float = None,
                  LEG_AWAY: float = None,
+
                  SHIP_HEIGHT: float = None,
                  SHIP_WIDTH: float = None,
 
@@ -94,6 +94,8 @@ class C:
                  FUELCOST_REWARD: bool = None,
 
                  CURRICULUM: bool = None,
+                 CURRICULUM_DECAY: float = None,
+                 CURRICULUM_ɛ: float = None,
                  ):
         """
 
@@ -179,6 +181,8 @@ class C:
 
         # FLAG FOR DECAYING CURRICULUM
         self.CURRICULUM = this_or_that(CURRICULUM, True)  # False
+        self.CURRICULUM_DECAY = this_or_that(CURRICULUM_DECAY, -100)
+        self.CURRICULUM_ɛ = this_or_that(CURRICULUM_ɛ, .33)
 
 
 class ContactDetector(contactListener):
@@ -297,16 +301,12 @@ class GymRocketLander(gym.Env):
         self.world.DestroyBody(self.containers[1])
         self.containers = []
 
-
     def curriculum_decay(self):
-        CURRICULUM_DECAY = -100
-        CURRICULUM_ɛ = .33
-        if np.random.uniform() > CURRICULUM_ɛ:
-            # self.n_episodes += 1  # to avoid division by zero, in case step starts at 0
-            decay_height = np.exp(CURRICULUM_DECAY / (self.episode_number + 1)) + .1  # start at height 0 and increase each episode
+        if np.random.uniform() > self.C.CURRICULUM_ɛ:
+            decay_height = np.exp(self.C.CURRICULUM_DECAY / (self.episode_number + 1)) + .1  # start at height 0 and increase each episode
             INIT_Y = np.random.normal(decay_height, .3)
-            self.C.INIT_Y = np.clip(INIT_Y, .1, .97)
-            self.C.INIT_X = .31 * (INIT_Y ** 2)
+            self.C.INIT_Y = np.clip(INIT_Y, .1, .95)
+            self.C.INIT_X = .31 * (INIT_Y ** 2) * np.random.choice([1, -1])
         else:
             # reset
             self.C.INIT_X, self.C.INIT_Y = self.C_INIT_X_Y
@@ -320,6 +320,7 @@ class GymRocketLander(gym.Env):
         self.throttle = 0
         self.gimbal = 0.0
         self.landed_ticks = 0
+        self.episode_number += 1
         self.stepnumber = 0
         self.smoke = []
 
@@ -601,22 +602,23 @@ class GymRocketLander(gym.Env):
             fuelcost = 0.1 * (0.5 * self.power + abs(self.force_dir)) / self.C.FPS
             reward = -fuelcost
         else:
+            # TODO: should we give a per frame negative reward?
             reward = 0
 
         if outside or brokenleg:
             self.game_over = True
 
         if self.game_over:
+            done = True
             if not self.C.SHAPING_REWARD:
                 reward = -1.0
-            done = True
         else:
             # reward shaping
-            if self.C.SHAPING_REWARD and self.prev_shaping is not None:
+            if self.C.SHAPING_REWARD:
                 shaping = -0.5 * (distance + speed + abs(angle) ** 2 + abs(vel_a) ** 2)
                 shaping += 0.1 * (self.legs[0].ground_contact + self.legs[1].ground_contact)
-                # if self.prev_shaping is not None:
-                reward += shaping - self.prev_shaping
+                if self.prev_shaping is not None:
+                    reward += shaping - self.prev_shaping
                 self.prev_shaping = shaping
 
             if landed:
@@ -624,8 +626,10 @@ class GymRocketLander(gym.Env):
             else:
                 self.landed_ticks = 0
             if self.landed_ticks == self.C.FPS:
-                reward = 1.0
                 done = True
+                if not self.C.SHAPING_REWARD:
+                    # TODO: should we give a higher "won" reward? (we can set a won flag and outside we can use that)
+                    reward = 1.0  # the agent won (= standing for 1 sec on the boat)
 
         if done and self.C.SHAPING_REWARD:
             reward += max(-1, 0 - 2 * (speed + distance + abs(angle) + abs(vel_a)))

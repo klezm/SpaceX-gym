@@ -1,6 +1,6 @@
 import time
 import collections
-# import json
+import json
 # import sys
 from pprint import pprint
 from types import SimpleNamespace
@@ -29,8 +29,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 # import stable_baselines3 as baselines
 
-import constants as CONST
-from policies import PolicyEstimatorNet
+import rl_rocket.constants as CONST
+from rl_rocket.policies import PolicyEstimatorNet
 
 
 class REINFORCEAgent:
@@ -87,6 +87,7 @@ class REINFORCEAgent:
         self.policy_net = PolicyEstimatorNet(self.state_dim, self.action_dim, net = net)
         # print(self.policy_net)
         self.tb_log.add_graph(model = self.policy_net, input_to_model = torch.Tensor(self.env.reset()))
+        self.tb_log.add_text("hparam/constants", json.dumps(vars(self.env.C), indent = 2), global_step = 0)
         self.optimizer = torch.optim.Adam(self.policy_net.parameters(), self.α)
 
         # https://towardsdatascience.com/learning-rate-schedules-and-adaptive-learning-rate-methods-for-deep-learning-2c8f433990d1
@@ -170,7 +171,7 @@ class REINFORCEAgent:
                 for t2 in range(t, self.T):
                     disc_reward += self.γ**(t2 - t) * self.r[t2]
                 G[t] += disc_reward
-                loss += G[t] * self.get_nll(self.s[t], self.a[t]) # get_nll returns the negative log likelihood for pi(a | s)
+                loss += G[t] * self.get_nll(self.s[t], self.a[t])  # get_nll returns the negative log likelihood for pi(a | s)
 
             loss.backward()
             self.optimizer.step()
@@ -219,12 +220,14 @@ class REINFORCEAgent:
                 self.tb_log.add_scalar("step/Reward", reward, global_step = self.total_steps)
                 if self.T + 1 >= self.t_max:  # Interupt episode when maximum of timesteps is reached
                     print(f"time expired after {self.T} steps")
+                    reward = -10  # TODO: should we give a big negative reward for timeouts?
                     done = True
                     # break
             self.tb_log.add_scalar("training/Reward", reward_episode, global_step = self.episode_i)
             self.tb_log.add_scalar("training/LR", self.scheduler.get_last_lr()[0], global_step = self.episode_i)
             # self.tb_log.add_scalar("training/LR", self.optimizer.param_groups[0]['lr'], global_step = self.episode_i)
             self.tb_log.add_scalar(f'training/Mean_reward_{CONST.MEAN_REWARD_LEN}', np.mean(self.reward_hist), global_step = self.episode_i)
+        # self.tb_log.add_hparams(vars(self.env.C), {f'hparam/last_{CONST.MEAN_REWARD_LEN}_mean_reward': np.mean(self.reward_hist)})
         self.tb_log.close()
         self.env.close()
 
