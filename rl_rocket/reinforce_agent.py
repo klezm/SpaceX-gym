@@ -169,7 +169,7 @@ class REINFORCEAgent:
             for t in range(self.T):
                 disc_reward = 0
                 for t2 in range(t, self.T):
-                    disc_reward += self.γ**(t2 - t) * self.r[t2]
+                    disc_reward += self.γ**(t2 - t) * self.r[t2 + 1]
                 G[t] += disc_reward
                 loss += G[t] * self.get_nll(self.s[t], self.a[t])  # get_nll returns the negative log likelihood for pi(a | s)
 
@@ -184,9 +184,9 @@ class REINFORCEAgent:
             self.tb_log.add_scalar("training/Episode_length", self.T, global_step = self.total_steps)
             # self.reset()
         else:
-            self.T += 1
             action = self.policy(state)
             self.a[self.T] = action
+            self.T += 1
             return action
 
     def train(self, total_episodes = CONST.MAX_EPISODE):
