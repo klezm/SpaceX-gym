@@ -313,6 +313,8 @@ class GymRocketLander(gym.Env):
         else:
             # reset
             self.C.INIT_X, self.C.INIT_Y = self.C_INIT_X_Y
+        self.C.START_SPEED = max(10, .1 * self.C.START_HEIGHT * self.C.INIT_Y)
+        # self.C.START_SPEED = .1 * self.C.START_HEIGHT * self.C.INIT_Y
 
     def reset(self):
         self._destroy()
@@ -630,9 +632,8 @@ class GymRocketLander(gym.Env):
                 self.landed_ticks = 0
             if self.landed_ticks == self.C.FPS:
                 done = True
-                if not self.C.SHAPING_REWARD:
-                    # TODO: should we give a higher "won" reward? (we can set a won flag and outside we can use that)
-                    reward = 10.0  # the agent won (= standing for 1 sec on the boat)
+                # TODO: should we give a higher "won" reward? (we can set a won flag and outside we can use that)
+                reward = 10.0  # the agent won (= standing for 1 sec on the boat)
 
         if done and self.C.SHAPING_REWARD:
             reward += max(-1, 0 - 2 * (speed + distance + abs(angle) + abs(vel_a)))

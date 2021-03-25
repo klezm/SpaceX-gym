@@ -1,3 +1,4 @@
+import pathlib
 import time
 import collections
 import json
@@ -217,9 +218,9 @@ class REINFORCEAgent:
                     # print(f"Final Reward of episode: {reward}")
                     break
                 state, reward, done, _ = self.env.step(np.array(action.detach()))
+                state = torch.tensor(state.astype(np.float32))
                 reward_episode += reward
                 self.reward_hist.append(reward_episode)
-                state = torch.tensor(state.astype(np.float32))
 
                 self.tb_log.add_scalar("step/reward", reward, global_step = self.total_steps)
                 if self.T + 1 >= self.t_max:  # Interupt episode when maximum of timesteps is reached
@@ -234,6 +235,64 @@ class REINFORCEAgent:
         # self.tb_log.add_hparams(vars(self.env.C), {f'hparam/last_{CONST.MEAN_REWARD_LEN}_mean_reward': np.mean(self.reward_hist)})
         self.tb_log.close()
         self.env.close()
+
+    def play(self, n_episodes = 1):
+        # self.policy_net.eval()
+        for n_episode in range(n_episodes):
+            self.reset()
+            state = torch.Tensor(self.env.reset())
+            reward_episode = 0
+            reward, done = 0, False
+            with torch.no_grad():
+                while True:
+                    self.total_steps += 1
+                    if done:
+                        break
+                    action = self.step(state, reward, done)
+                    state, reward, done, _ = self.env.step(np.array(action.detach()))
+                    state = torch.tensor(state.astype(np.float32))
+                    reward_episode += reward
+                    self.reward_hist.append(reward_episode)
+
+                    if self.T + 1 >= self.t_max:  # Interupt episode when maximum of timesteps is reached
+                        print(f"time expired after {self.T} steps")
+                        done = True
+                        break
+                self.env.close()
+
+    def save(self, save_path):
+        save_path = pathlib.Path(save_path)
+        save_path.mkdir(exist_ok = True)
+
+        torch.save(self.policy_net.state_dict(), save_path.joinpath("model.pth"))
+        with open(save_path.joinpath("agent.json"), "w+") as f:
+            json.dump(
+                {"agent": {k: v for k, v in vars(self).items() if
+                    not isinstance(v, (torch.Tensor, collections.deque))
+                    and k not in ["env", "optimizer", "scheduler", "scheduler", "tb_log", "policy_net", "neg_log_likelihood"]},
+                 "C": vars(self.env.C),
+                 "env": {k: v for k, v in vars(self.env).items() if
+                         not isinstance(v, gym.Space)
+                         and k not in ["world", "containers", "water", "drawlist", "ship", "lander", "legs", "C", "np_random"]},
+                 },
+                f, indent = 2
+            )
+
+    def load(self, folder):
+        folder = pathlib.Path(folder)
+        self.policy_net.load_state_dict(torch.load(folder.joinpath("model.pth")))
+        # self.policy_net.eval()
+
+        with open(folder.joinpath("agent.json")) as f:
+            json_agent = json.load(f)
+
+        for k, v in json_agent["agent"].items():
+            setattr(self, k, v)
+        for k, v in json_agent["C"].items():
+            setattr(self.env.C, k, v)
+        # self.env.C.__init(**json.load(folder.joinpath(self._save_pths["C"])))
+        for k, v in json_agent["env"].items():
+            setattr(self.env, k, v)
 
 
 if __name__ == "__main__":
