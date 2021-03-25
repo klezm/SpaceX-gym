@@ -14,10 +14,10 @@ class PolicyEstimatorNet(nn.Module):
         self.out_features = 2 * action_dim  # mean and std for each dim
         if net is None:
             self.net = nn.Sequential(
-                nn.Linear(self.in_features, 100),
+                nn.Linear(self.in_features, 256),
                 nn.ReLU(),
                 # TODO: find a suitable architecture
-                nn.Linear(100, self.out_features),
+                nn.Linear(256, self.out_features),
                 # nn.Softmax(),  # TODO: Softmax macht hier keinen Sinn oder? wir haben ja means und std's, keine Wahrscheinlichkeiten
                 )
         else:

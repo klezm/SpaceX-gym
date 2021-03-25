@@ -173,15 +173,19 @@ class REINFORCEAgent:
                 G[t] += disc_reward
                 loss += G[t] * self.get_nll(self.s[t], self.a[t])  # get_nll returns the negative log likelihood for pi(a | s)
 
+            # Zero out all of the gradients for the variables which the optimizer will update.
+            self.optimizer.zero_grad()
+            # This is the backwards pass: compute the gradient of the loss with respect to each  parameter of the model.
             loss.backward()
+            # Actually update the parameters of the model using the gradients computed by the backwards pass.
             self.optimizer.step()
             if self.scheduler.get_last_lr()[0] > self.α_min:  # if the learning rate is above α_min then do decay
                 self.scheduler.step()
             # self.α_this = self.scheduler.get_last_lr()[0]
 
             # print(f"Episode took {self.T} steps, and gave a total loss of {loss}")
-            self.tb_log.add_scalar("training/Loss", loss, global_step = self.episode_i)
-            self.tb_log.add_scalar("training/Episode_length", self.T, global_step = self.total_steps)
+            self.tb_log.add_scalar("training/policy_loss", loss, global_step = self.episode_i)
+            self.tb_log.add_scalar("training/episode_length", self.T, global_step = self.total_steps)
             # self.reset()
         else:
             action = self.policy(state)
@@ -217,16 +221,16 @@ class REINFORCEAgent:
                 self.reward_hist.append(reward_episode)
                 state = torch.tensor(state.astype(np.float32))
 
-                self.tb_log.add_scalar("step/Reward", reward, global_step = self.total_steps)
+                self.tb_log.add_scalar("step/reward", reward, global_step = self.total_steps)
                 if self.T + 1 >= self.t_max:  # Interupt episode when maximum of timesteps is reached
                     print(f"time expired after {self.T} steps")
-                    reward = -10  # TODO: should we give a big negative reward for timeouts?
+                    # reward = -10  # TODO: should we give a big negative reward for timeouts?
                     done = True
                     # break
-            self.tb_log.add_scalar("training/Reward", reward_episode, global_step = self.episode_i)
-            self.tb_log.add_scalar("training/LR", self.scheduler.get_last_lr()[0], global_step = self.episode_i)
-            # self.tb_log.add_scalar("training/LR", self.optimizer.param_groups[0]['lr'], global_step = self.episode_i)
-            self.tb_log.add_scalar(f'training/Mean_reward_{CONST.MEAN_REWARD_LEN}', np.mean(self.reward_hist), global_step = self.episode_i)
+            self.tb_log.add_scalar("training/reward", reward_episode, global_step = self.episode_i)
+            self.tb_log.add_scalar("training/α", self.scheduler.get_last_lr()[0], global_step = self.episode_i)
+            # self.tb_log.add_scalar("training/α", self.optimizer.param_groups[0]["lr"], global_step = self.episode_i)
+            self.tb_log.add_scalar(f'training/mean_reward_{CONST.MEAN_REWARD_LEN}', np.mean(self.reward_hist), global_step = self.episode_i)
         # self.tb_log.add_hparams(vars(self.env.C), {f'hparam/last_{CONST.MEAN_REWARD_LEN}_mean_reward': np.mean(self.reward_hist)})
         self.tb_log.close()
         self.env.close()

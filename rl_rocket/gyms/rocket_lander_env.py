@@ -142,7 +142,9 @@ class C:
         self.INIT_Y = this_or_that(INIT_Y, .95)  # percentage of height
 
         self.START_HEIGHT = this_or_that(START_HEIGHT, 800.0)
-        self.START_SPEED = this_or_that(START_SPEED, 80.0)
+        # self.START_SPEED = this_or_that(START_SPEED, 80.0)
+        # self.START_SPEED = this_or_that(START_SPEED if START_SPEED is None else max(20, .1 * self.START_HEIGHT * self.INIT_Y), 80.0)
+        self.START_SPEED = this_or_that(START_SPEED if START_SPEED is None else .1 * self.START_HEIGHT * self.INIT_Y, 80.0)
 
         # ROCKET
         self.MIN_THROTTLE = this_or_that(MIN_THROTTLE, 0.4)
@@ -303,6 +305,7 @@ class GymRocketLander(gym.Env):
 
     def curriculum_decay(self):
         if np.random.uniform() > self.C.CURRICULUM_ɛ:
+            # TODO: maybe: instead of self.episode_number => number of successful games
             decay_height = np.exp(self.C.CURRICULUM_DECAY / (self.episode_number + 1)) + .1  # start at height 0 and increase each episode
             INIT_Y = np.random.normal(decay_height, .3)
             self.C.INIT_Y = np.clip(INIT_Y, .1, .95)
@@ -601,9 +604,9 @@ class GymRocketLander(gym.Env):
         if self.C.FUELCOST_REWARD:
             fuelcost = 0.1 * (0.5 * self.power + abs(self.force_dir)) / self.C.FPS
             reward = -fuelcost
-        else:
-            # TODO: should we give a per frame negative reward?
-            reward = 0
+        # else:
+        #     # TODO: should we give a per frame negative reward?
+        #     reward = -.01
 
         if outside or brokenleg:
             self.game_over = True
@@ -629,7 +632,7 @@ class GymRocketLander(gym.Env):
                 done = True
                 if not self.C.SHAPING_REWARD:
                     # TODO: should we give a higher "won" reward? (we can set a won flag and outside we can use that)
-                    reward = 1.0  # the agent won (= standing for 1 sec on the boat)
+                    reward = 10.0  # the agent won (= standing for 1 sec on the boat)
 
         if done and self.C.SHAPING_REWARD:
             reward += max(-1, 0 - 2 * (speed + distance + abs(angle) + abs(vel_a)))
