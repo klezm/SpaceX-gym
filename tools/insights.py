@@ -3,6 +3,8 @@ import gym
 
 
 def print_env_info(env: gym.Env):
+    print(f'--------------------   {env.spec.id}   --------------------' "\n")
+
     print("\n" "--------------------     env     --------------------")
     pprint(vars(env))
 

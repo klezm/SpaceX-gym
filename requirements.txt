@@ -1,0 +1,6 @@
+torch
+tensorboard
+gym
+gym[classic_control]
+gym[box2d]
+# stable-baselines3[extra] # https://github.com/DLR-RM/stable-baselines3 # DLR implemented a PyTorch version
