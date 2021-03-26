@@ -313,7 +313,7 @@ class GymRocketLander(gym.Env):
         else:
             # reset
             self.C.INIT_X, self.C.INIT_Y = self.C_INIT_X_Y
-        self.C.START_SPEED = max(10, .1 * self.C.START_HEIGHT * self.C.INIT_Y)
+        self.C.START_SPEED = max(25, .1 * self.C.START_HEIGHT * self.C.INIT_Y)
         # self.C.START_SPEED = .1 * self.C.START_HEIGHT * self.C.INIT_Y
 
     def reset(self):

@@ -6,6 +6,7 @@ import json
 from pprint import pprint
 from types import SimpleNamespace
 from typing import Optional
+from os import PathLike
 
 import imageio
 import PIL.Image
@@ -43,11 +44,12 @@ class REINFORCEAgent:
                  tb_log: SummaryWriter,
                  alpha = 1e-3,
                  alpha_min = 1e-6,
-                 gamma = .99,
+                 gamma = .995,
                  epsilon = .1,
                  net = None,
                  video = None,
                  curriculum = True,
+                 save_path: Optional[PathLike] = True
                  ):
         """
         Implementation of REINFORCE algorithm.
@@ -83,6 +85,17 @@ class REINFORCEAgent:
         self.total_steps = 0
         self.episode_i = 0
         self.reward_hist = collections.deque(maxlen = CONST.MEAN_REWARD_LEN)
+        self._mean_reward = None
+        self.mean_reward_best = None
+        self.mean_reward_best_id = None
+        self.save_path: str = (
+                          # pathlib.Path(f'/content/save/{time.strftime("%y-%m-%d_%H-%M-%S", time.gmtime())}')
+                          # if save_path is True and "COLAB_GPU" in os.environ else
+                          pathlib.Path(f'save/{time.strftime("%y-%m-%d_%H-%M-%S", time.gmtime())}')
+                          if save_path is True else save_path
+                          # if save_path is True else pathlib.Path(save_path)
+                          # if save_path else save_path
+        )
 
         # setting up the policy estimating network
         self.policy_net = PolicyEstimatorNet(self.state_dim, self.action_dim, net = net)
@@ -99,7 +112,29 @@ class REINFORCEAgent:
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, self.γ)
         # self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda = self.lr_step)
         # self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, )
-        # self.scheduler = torch.optim.lr_scheduler.CyclicLR(self.optimizer, )
+        # self.scheduler = torch.optim.lr_scheduler.CyclicLR(self.optimizer, base_lr = self.α_min, max_lr = self.α, step_size_up = 25_000)
+
+    @property
+    def mean_reward(self):
+        return np.mean(self.reward_hist)
+
+    @mean_reward.setter
+    def mean_reward(self, val):
+        self._mean_reward = val
+
+    @property
+    def save_path(self):
+        if self._save_path is None:
+            return None
+        return pathlib.Path(self._save_path)
+
+    @save_path.setter
+    def save_path(self, value):
+        if value is None:
+            self._save_path = value
+        else:
+            # self._save_path = str(value)
+            self._save_path = pathlib.Path(value).as_posix()
 
     # def lr_step(self, episode):
     #     # print("episode:", episode)  # 0, 1, 2, ...
@@ -232,6 +267,19 @@ class REINFORCEAgent:
             self.tb_log.add_scalar("training/α", self.scheduler.get_last_lr()[0], global_step = self.episode_i)
             # self.tb_log.add_scalar("training/α", self.optimizer.param_groups[0]["lr"], global_step = self.episode_i)
             self.tb_log.add_scalar(f'training/mean_reward_{CONST.MEAN_REWARD_LEN}', np.mean(self.reward_hist), global_step = self.episode_i)
+            FIRST_CHECKPOINT = 100
+            if ((
+                    self.mean_reward_best_id is not None
+                    and self.mean_reward > self.mean_reward_best
+                    # and FIRST_CHECKPOINT < self.episode_i
+                    # and FIRST_CHECKPOINT < self.mean_reward_best_id <= self.episode_i + 10
+                )
+                or self.episode_i == FIRST_CHECKPOINT
+            ):
+                self.save()
+                self.mean_reward_best_id = self.episode_i
+                self.mean_reward_best = self.mean_reward
+                # self.save(self.save_path.joinpath(f'{self.episode_i:{len(str(CONST.MAX_EPISODE))}}'))
         # self.tb_log.add_hparams(vars(self.env.C), {f'hparam/last_{CONST.MEAN_REWARD_LEN}_mean_reward': np.mean(self.reward_hist)})
         self.tb_log.close()
         self.env.close()
@@ -260,34 +308,55 @@ class REINFORCEAgent:
                         break
                 self.env.close()
 
-    def save(self, save_path):
+    def save(self, save_path = None):
+        if save_path is None:
+            save_path = self.save_path
         save_path = pathlib.Path(save_path)
-        save_path.mkdir(exist_ok = True)
+        save_path.mkdir(parents = True, exist_ok = True)
 
-        torch.save(self.policy_net.state_dict(), save_path.joinpath("model.pth"))
+        def type_converter(data):
+            if isinstance(data, collections.deque):
+                return list(data)
+            else:
+                return data
+
+        # torch.save(self.policy_net.state_dict(), save_path.joinpath(f'model_{self.episode_i:0{len(str(CONST.MAX_EPISODE))}}.pth'))
+        torch.save(self.policy_net.state_dict(), save_path.joinpath(f'model_{self.episode_i}.pth'))
+
+        data = {
+            "agent": {k: type_converter(v) for k, v in vars(self).items() if
+                      not isinstance(v, (torch.Tensor))
+                      and k not in ["env", "optimizer", "scheduler", "scheduler", "tb_log", "policy_net", "neg_log_likelihood"]
+                      # and not k.startswith("_")
+                      },
+            "C": vars(self.env.C),
+            "env": {k: v for k, v in vars(self.env).items() if
+                    not isinstance(v, gym.Space)
+                    and k not in ["world", "containers", "water", "drawlist", "ship", "lander", "legs", "C", "np_random"]},
+         }
+
+        # data["agent"].update({"mean_reward": self.mean_reward})
+
         with open(save_path.joinpath("agent.json"), "w+") as f:
-            json.dump(
-                {"agent": {k: v for k, v in vars(self).items() if
-                    not isinstance(v, (torch.Tensor, collections.deque))
-                    and k not in ["env", "optimizer", "scheduler", "scheduler", "tb_log", "policy_net", "neg_log_likelihood"]},
-                 "C": vars(self.env.C),
-                 "env": {k: v for k, v in vars(self.env).items() if
-                         not isinstance(v, gym.Space)
-                         and k not in ["world", "containers", "water", "drawlist", "ship", "lander", "legs", "C", "np_random"]},
-                 },
-                f, indent = 2
-            )
+            json.dump(data, f, indent = 2)
 
     def load(self, folder):
         folder = pathlib.Path(folder)
-        self.policy_net.load_state_dict(torch.load(folder.joinpath("model.pth")))
+        # model = sorted([x for x in folder.glob("model*.pth")])[-1]
+        model = sorted([x for x in folder.glob("model*.pth")], key = lambda x: int(x.stem.split("_")[-1]))[-1]
+        self.policy_net.load_state_dict(torch.load(model))
         # self.policy_net.eval()
 
         with open(folder.joinpath("agent.json")) as f:
             json_agent = json.load(f)
 
         for k, v in json_agent["agent"].items():
-            setattr(self, k, v)
+            # if k == "_mean_reward":
+            #     setattr(self, "mean_reward", v)
+            if k == "reward_hist":
+                setattr(self, k, collections.deque(v, maxlen = CONST.MEAN_REWARD_LEN))
+            else:
+                setattr(self, k, v)
         for k, v in json_agent["C"].items():
             setattr(self.env.C, k, v)
         # self.env.C.__init(**json.load(folder.joinpath(self._save_pths["C"])))
