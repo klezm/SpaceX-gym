@@ -73,6 +73,7 @@ class REINFORCEAgent:
         self.α_min = alpha_min
         self.γ = gamma
         self.ɛ = epsilon
+        self.G_baseline = 0  # Mean of the so far seen G's
         # self.policy_net: nn.Model = None
         self.neg_log_likelihood = nn.GaussianNLLLoss()  # negative log likelihood
         self.tb_log = tb_log
@@ -174,7 +175,8 @@ class REINFORCEAgent:
                 for t2 in range(t, self.T):
                     disc_reward += self.γ**(t2 - t) * self.r[t2 + 1]
                 G[t] += disc_reward
-                loss += G[t] * self.get_nll(self.s[t], self.a[t])  # get_nll returns the negative log likelihood for pi(a | s)
+                loss += (G[t] - self.G_baseline) * self.get_nll(self.s[t], self.a[t])  # get_nll returns the negative log likelihood for pi(a | s)
+                self.G_baseline += 1 / self.total_steps * (G[t] - self.G_baseline)
 
             # Zero out all of the gradients for the variables which the optimizer will update.
             self.optimizer.zero_grad()
