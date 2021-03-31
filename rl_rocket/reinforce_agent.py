@@ -31,6 +31,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 # import stable_baselines3 as baselines
 
+from rl_rocket.gyms.rocket_lander_env import GymRocketLander
 import rl_rocket.constants as CONST
 from rl_rocket.policies import PolicyEstimatorNet
 
@@ -328,22 +329,23 @@ class REINFORCEAgent:
         # torch.save(self.policy_net.state_dict(), save_path.joinpath(f'model_{self.episode_i:0{len(str(CONST.MAX_EPISODE))}}.pth'))
         torch.save(self.policy_net.state_dict(), save_path.joinpath(f'model_{self.episode_i}.pth'))
 
-        data = {
-            "agent": {k: type_converter(v) for k, v in vars(self).items() if
-                      not isinstance(v, (torch.Tensor))
-                      and k not in ["env", "optimizer", "scheduler", "scheduler", "tb_log", "policy_net", "neg_log_likelihood"]
-                      # and not k.startswith("_")
-                      },
-            "C": vars(self.env.C),
-            "env": {k: v for k, v in vars(self.env).items() if
-                    not isinstance(v, gym.Space)
-                    and k not in ["world", "containers", "water", "drawlist", "ship", "lander", "legs", "C", "np_random"]},
-         }
+        if isinstance(self.env, GymRocketLander):
+            data = {
+                "agent": {k: type_converter(v) for k, v in vars(self).items() if
+                          not isinstance(v, (torch.Tensor))
+                          and k not in ["env", "optimizer", "scheduler", "scheduler", "tb_log", "policy_net", "neg_log_likelihood"]
+                          # and not k.startswith("_")
+                          },
+                "C": vars(self.env.C),
+                "env": {k: v for k, v in vars(self.env).items() if
+                        not isinstance(v, gym.Space)
+                        and k not in ["world", "containers", "water", "drawlist", "ship", "lander", "legs", "C", "np_random"]},
+             }
 
-        # data["agent"].update({"mean_reward": self.mean_reward})
+            # data["agent"].update({"mean_reward": self.mean_reward})
 
-        with open(save_path.joinpath("agent.json"), "w+") as f:
-            json.dump(data, f, indent = 2)
+            with open(save_path.joinpath("agent.json"), "w+") as f:
+                json.dump(data, f, indent = 2)
 
     def load(self, folder):
         folder = pathlib.Path(folder)
@@ -352,21 +354,22 @@ class REINFORCEAgent:
         self.policy_net.load_state_dict(torch.load(model))
         # self.policy_net.eval()
 
-        with open(folder.joinpath("agent.json")) as f:
-            json_agent = json.load(f)
+        if isinstance(self.env, GymRocketLander):
+            with open(folder.joinpath("agent.json")) as f:
+                json_agent = json.load(f)
 
-        for k, v in json_agent["agent"].items():
-            # if k == "_mean_reward":
-            #     setattr(self, "mean_reward", v)
-            if k == "reward_hist":
-                setattr(self, k, collections.deque(v, maxlen = CONST.MEAN_REWARD_LEN))
-            else:
-                setattr(self, k, v)
-        for k, v in json_agent["C"].items():
-            setattr(self.env.C, k, v)
-        # self.env.C.__init(**json.load(folder.joinpath(self._save_pths["C"])))
-        for k, v in json_agent["env"].items():
-            setattr(self.env, k, v)
+            for k, v in json_agent["agent"].items():
+                # if k == "_mean_reward":
+                #     setattr(self, "mean_reward", v)
+                if k == "reward_hist":
+                    setattr(self, k, collections.deque(v, maxlen = CONST.MEAN_REWARD_LEN))
+                else:
+                    setattr(self, k, v)
+            for k, v in json_agent["C"].items():
+                setattr(self.env.C, k, v)
+            # self.env.C.__init(**json.load(folder.joinpath(self._save_pths["C"])))
+            for k, v in json_agent["env"].items():
+                setattr(self.env, k, v)
 
 
 if __name__ == "__main__":

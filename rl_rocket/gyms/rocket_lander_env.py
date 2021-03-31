@@ -1,5 +1,8 @@
 # https://github.com/EmbersArc/gym-rocketlander
 
+from dataclasses import dataclass, InitVar
+import dataclasses
+
 import numpy as np
 import Box2D
 from Box2D.b2 import (
@@ -50,141 +53,103 @@ def _plot_curriculum_decay():
     plt.show()
 
 
+@dataclass
 class C:
-    def __init__(self,
-                 CONTINUOUS: bool = None,
-                 VEL_STATE: bool = None,
-                 FPS: int = None,
-                 SCALE_S: float = None,
-                 INITIAL_RANDOM: float = None,
+    """
 
-                 INIT_X: float = None,
-                 INIT_Y: float = None,
+    :param CONTINUOUS:
+    :param VEL_STATE: Add velocity info to state
+    :param FPS:
+    :param SCALE_S: Temporal Scaling, lower is faster - adjust forces appropriately
+    :param INITIAL_RANDOM: Random scaling of initial velocity, higher is more difficult
+    :param INIT_X: ±limit of N-distr from center
+    :param INIT_Y: percentage of height
+    :param START_HEIGHT:
+    :param START_SPEED:
+    :param MIN_THROTTLE:
+    :param GIMBAL_THRESHOLD:
+    :param MAIN_ENGINE_POWER:
+    :param SIDE_ENGINE_POWER:
+    :param ROCKET_WIDTH:
+    :param ROCKET_HEIGHT:
+    :param ENGINE_HEIGHT:
+    :param ENGINE_WIDTH:
+    :param THRUSTER_HEIGHT:
+    :param LEG_LENGTH:
+    :param BASE_ANGLE:
+    :param SPRING_ANGLE:
+    :param LEG_AWAY:
+    :param SHIP_HEIGHT:
+    :param SHIP_WIDTH:
+    :param VIEWPORT_H:
+    :param VIEWPORT_W:
+    :param H:
+    :param W:
+    :param MAX_SMOKE_LIFETIME:
+    """
+    CONTINUOUS: bool = True
+    VEL_STATE: bool = True  # Add velocity info to state
+    FPS: int = 60
+    SCALE_S: float = 0.35  # Temporal Scaling, lower is faster - adjust forces appropriately
+    INITIAL_RANDOM: float = 0.4  # Random scaling of initial velocity, higher is more difficult (set -1 to turn it off)
 
-                 START_HEIGHT: float = None,
-                 START_SPEED: float = None,
+    INIT_X: float = .3  # ±limit of N-distr from center
+    INIT_Y: float = .95  # percentage of height
 
-                 MIN_THROTTLE: float = None,
-                 GIMBAL_THRESHOLD: float = None,
-                 MAIN_ENGINE_POWER: float = None,
-                 SIDE_ENGINE_POWER: float = None,
+    START_HEIGHT: float = 800.0
+    # START_SPEED = 80.0
+    # START_SPEED = START_SPEED if START_SPEED is None else max(20, .1 * START_HEIGHT * INIT_Y), 80.0)
+    # TODO 80 if none else formula
+    # START_SPEED: float = 80.0 if START_SPEED is None else max(20, .1 * START_HEIGHT * INIT_Y)
+    # for curriculum training it is useful to adjust the start speed depending on the start height
+    # START_SPEED: float = dataclasses.field(default_factory = lambda: max(20, .1 * START_HEIGHT * INIT_Y))
+    # START_SPEED: float = dataclasses.field(init = False)
+    START_SPEED: float = 80
 
-                 ROCKET_WIDTH: float = None,
-                 ROCKET_HEIGHT: float = None,
-                 ENGINE_HEIGHT: float = None,
-                 ENGINE_WIDTH: float = None,
-                 THRUSTER_HEIGHT: float = None,
+    # ROCKET
+    MIN_THROTTLE: float = 0.4
+    GIMBAL_THRESHOLD: float = 0.4
+    MAIN_ENGINE_POWER: float = 1600 * SCALE_S
+    SIDE_ENGINE_POWER: float = 100 / FPS * SCALE_S
 
-                 LEG_LENGTH: float = None,
-                 BASE_ANGLE: float = None,
-                 SPRING_ANGLE: float = None,
-                 LEG_AWAY: float = None,
+    ROCKET_WIDTH: float = 3.66 * SCALE_S
+    ROCKET_HEIGHT: float = ROCKET_WIDTH / 3.7 * 47.9
+    ENGINE_HEIGHT: float = ROCKET_WIDTH * 0.5
+    ENGINE_WIDTH: float = ENGINE_HEIGHT * 0.7
+    THRUSTER_HEIGHT: float = ROCKET_HEIGHT * 0.86
 
-                 SHIP_HEIGHT: float = None,
-                 SHIP_WIDTH: float = None,
+    # LEGS
+    LEG_LENGTH: float = ROCKET_WIDTH * 2.2
+    BASE_ANGLE: float = -0.27
+    SPRING_ANGLE: float = 0.27
+    LEG_AWAY: float = ROCKET_WIDTH / 2
 
-                 VIEWPORT_H: int = None,
-                 VIEWPORT_W: int = None,
-                 H: float = None,
-                 W: float = None,
+    # SHIP
+    SHIP_HEIGHT: float = ROCKET_WIDTH
+    SHIP_WIDTH: float = SHIP_HEIGHT * 40
 
-                 MAX_SMOKE_LIFETIME: int = None,
+    # VIEWPORT
+    VIEWPORT_H: int = 720
+    VIEWPORT_W: int = 500
+    H: float = 1.1 * START_HEIGHT * SCALE_S
+    W: float = float(VIEWPORT_W) / VIEWPORT_H * H
 
-                 SHAPING_REWARD: bool = None,
-                 FUELCOST_REWARD: bool = None,
+    # SMOKE FOR VISUALS
+    MAX_SMOKE_LIFETIME: int = 2 * FPS
 
-                 CURRICULUM: bool = None,
-                 CURRICULUM_DECAY: float = None,
-                 CURRICULUM_ɛ: float = None,
-                 ):
-        """
+    # FLAGS FOR REWARDS
+    SHAPING_REWARD: bool = True
+    FUELCOST_REWARD: bool = True
 
-        :param CONTINUOUS:
-        :param VEL_STATE: Add velocity info to state
-        :param FPS:
-        :param SCALE_S: Temporal Scaling, lower is faster - adjust forces appropriately
-        :param INITIAL_RANDOM: Random scaling of initial velocity, higher is more difficult
-        :param INIT_X: ±limit of N-distr from center
-        :param INIT_Y: percentage of height
-        :param START_HEIGHT:
-        :param START_SPEED:
-        :param MIN_THROTTLE:
-        :param GIMBAL_THRESHOLD:
-        :param MAIN_ENGINE_POWER:
-        :param SIDE_ENGINE_POWER:
-        :param ROCKET_WIDTH:
-        :param ROCKET_HEIGHT:
-        :param ENGINE_HEIGHT:
-        :param ENGINE_WIDTH:
-        :param THRUSTER_HEIGHT:
-        :param LEG_LENGTH:
-        :param BASE_ANGLE:
-        :param SPRING_ANGLE:
-        :param LEG_AWAY:
-        :param SHIP_HEIGHT:
-        :param SHIP_WIDTH:
-        :param VIEWPORT_H:
-        :param VIEWPORT_W:
-        :param H:
-        :param W:
-        :param MAX_SMOKE_LIFETIME:
-        """
-        def this_or_that(x, y):
-            return y if x is None else x
+    # FLAG FOR DECAYING CURRICULUM
+    CURRICULUM: bool = False
+    CURRICULUM_DECAY: float = -100
+    CURRICULUM_ɛ: float = .33
 
-        self.CONTINUOUS = this_or_that(CONTINUOUS, True)
-        self.VEL_STATE = this_or_that(VEL_STATE, True)  # Add velocity info to state
-        self.FPS = this_or_that(FPS, 60)
-        self.SCALE_S = this_or_that(SCALE_S, 0.35)  # Temporal Scaling, lower is faster - adjust forces appropriately
-        self.INITIAL_RANDOM = this_or_that(INITIAL_RANDOM, 0.4)  # Random scaling of initial velocity, higher is more difficult
+    def __post_init__(self):
+        if self.INIT_Y < .5:
+            self.START_SPEED = max(20, .1 * self.START_HEIGHT * self.INIT_Y)
 
-        self.INIT_X = this_or_that(INIT_X, .3)  # ±limit of N-distr from center
-        self.INIT_Y = this_or_that(INIT_Y, .95)  # percentage of height
-
-        self.START_HEIGHT = this_or_that(START_HEIGHT, 800.0)
-        # self.START_SPEED = this_or_that(START_SPEED, 80.0)
-        # self.START_SPEED = this_or_that(START_SPEED if START_SPEED is None else max(20, .1 * self.START_HEIGHT * self.INIT_Y), 80.0)
-        self.START_SPEED = this_or_that(START_SPEED if START_SPEED is None else .1 * self.START_HEIGHT * self.INIT_Y, 80.0)
-
-        # ROCKET
-        self.MIN_THROTTLE = this_or_that(MIN_THROTTLE, 0.4)
-        self.GIMBAL_THRESHOLD = this_or_that(GIMBAL_THRESHOLD, 0.4)
-        self.MAIN_ENGINE_POWER = this_or_that(MAIN_ENGINE_POWER, 1600 * self.SCALE_S)
-        self.SIDE_ENGINE_POWER = this_or_that(SIDE_ENGINE_POWER, 100 / self.FPS * self.SCALE_S)
-
-        self.ROCKET_WIDTH = this_or_that(ROCKET_WIDTH, 3.66 * self.SCALE_S)
-        self.ROCKET_HEIGHT = this_or_that(ROCKET_HEIGHT, self.ROCKET_WIDTH / 3.7 * 47.9)
-        self.ENGINE_HEIGHT = this_or_that(ENGINE_HEIGHT, self.ROCKET_WIDTH * 0.5)
-        self.ENGINE_WIDTH = this_or_that(ENGINE_WIDTH, self.ENGINE_HEIGHT * 0.7)
-        self.THRUSTER_HEIGHT = this_or_that(THRUSTER_HEIGHT, self.ROCKET_HEIGHT * 0.86)
-
-        # LEGS
-        self.LEG_LENGTH = this_or_that(LEG_LENGTH, self.ROCKET_WIDTH * 2.2)
-        self.BASE_ANGLE = this_or_that(BASE_ANGLE, -0.27)
-        self.SPRING_ANGLE = this_or_that(SPRING_ANGLE, 0.27)
-        self.LEG_AWAY = this_or_that(LEG_AWAY, self.ROCKET_WIDTH / 2)
-
-        # SHIP
-        self.SHIP_HEIGHT = this_or_that(SHIP_HEIGHT, self.ROCKET_WIDTH)
-        self.SHIP_WIDTH = this_or_that(SHIP_WIDTH, self.SHIP_HEIGHT * 40)
-
-        # VIEWPORT
-        self.VIEWPORT_H = this_or_that(VIEWPORT_H, 720)
-        self.VIEWPORT_W = this_or_that(VIEWPORT_W, 500)
-        self.H = this_or_that(H, 1.1 * self.START_HEIGHT * self.SCALE_S)
-        self.W = this_or_that(W, float(self.VIEWPORT_W) / self.VIEWPORT_H * self.H)
-
-        # SMOKE FOR VISUALS
-        self.MAX_SMOKE_LIFETIME = this_or_that(MAX_SMOKE_LIFETIME, 2 * self.FPS)
-
-        # FLAGS FOR REWARDS
-        self.SHAPING_REWARD = this_or_that(SHAPING_REWARD, False)  # True
-        self.FUELCOST_REWARD = this_or_that(FUELCOST_REWARD, False)  # True
-
-        # FLAG FOR DECAYING CURRICULUM
-        self.CURRICULUM = this_or_that(CURRICULUM, True)  # False
-        self.CURRICULUM_DECAY = this_or_that(CURRICULUM_DECAY, -100)
-        self.CURRICULUM_ɛ = this_or_that(CURRICULUM_ɛ, .33)
 
 
 class ContactDetector(contactListener):
@@ -603,6 +568,7 @@ class GymRocketLander(gym.Env):
         )
         done = False
 
+        reward = 0
         if self.C.FUELCOST_REWARD:
             fuelcost = 0.1 * (0.5 * self.power + abs(self.force_dir)) / self.C.FPS
             reward = -fuelcost
