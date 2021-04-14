@@ -50,6 +50,7 @@ class REINFORCEAgent:
                  curriculum = True,
                  hidden_layer_size = 100,
                  n_hidden = 1,
+                 clip_std = 0,
                  ):
         """
         Implementation of REINFORCE algorithm.
@@ -88,7 +89,7 @@ class REINFORCEAgent:
         self.reward_hist = collections.deque(maxlen = CONST.MEAN_REWARD_LEN)
 
         # setting up the policy estimating network
-        self.policy_net = PolicyEstimatorNet(self.state_dim, self.action_dim, net = net, hidden_size = hidden_layer_size, n_hidden = n_hidden)
+        self.policy_net = PolicyEstimatorNet(self.state_dim, self.action_dim, net = net, hidden_size = hidden_layer_size, n_hidden = n_hidden, clip_std = clip_std)
         # print(self.policy_net)
         self.tb_log.add_graph(model = self.policy_net, input_to_model = torch.Tensor(self.env.reset()))
         self.tb_log.add_text("hparam/constants", json.dumps(vars(self.env.C), indent = 2), global_step = 0)

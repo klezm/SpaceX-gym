@@ -157,7 +157,7 @@ class LunarLander(gym.Env, EzPickle):
         self.moon.color1 = (0.0, 0.0, 0.0)
         self.moon.color2 = (0.0, 0.0, 0.0)
 
-        initial_y = VIEWPORT_H/SCALE
+        initial_y = VIEWPORT_H/SCALE * 0.3
         self.lander = self.world.CreateDynamicBody(
             position=(VIEWPORT_W/SCALE/2, initial_y),
             angle=0.0,

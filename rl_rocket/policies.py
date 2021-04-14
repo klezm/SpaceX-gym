@@ -4,14 +4,15 @@ from pprint import pprint
 import gym
 import torch
 from torch import nn
-
+import torch.nn.functional as F
 
 class PolicyEstimatorNet(nn.Module):
     # Network for Reinforce
-    def __init__(self, state_dim, action_dim, net = None, hidden_size = 256, n_hidden = 0):
+    def __init__(self, state_dim, action_dim, net = None, hidden_size = 256, n_hidden = 0, clip_std = 0):
         super().__init__()
         self.in_features = state_dim
         self.out_features = 2 * action_dim  # mean and std for each dim
+        self.clip_std = clip_std # set zero to deactivate
         if net is None:
             self.net = nn.Sequential(
                 nn.Linear(self.in_features, hidden_size),
@@ -36,4 +37,9 @@ class PolicyEstimatorNet(nn.Module):
         out = self.net(state)
         means = out[:self.out_features // 2]
         std = out[self.out_features // 2:]
+
+        # This part was added to make it possible for the std to be zero
+        # (otherwise it can only converge but never reach 0)
+        std = torch.abs(std)
+        std = self.clip_std + F.relu(std - self.clip_std) # sets all values below 0.1 to zero
         return means, std
