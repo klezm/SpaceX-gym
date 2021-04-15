@@ -52,8 +52,8 @@ class REINFORCEAgent:
                  curriculum = True,
                  hidden_layer_size = 100,
                  n_hidden = 1,
-                 save_path: Optional[PathLike] = True
-                 clip_std = 0,
+                 save_path: Optional[PathLike] = True,
+                 min_action = 0,
                  ):
         """
         Implementation of REINFORCE algorithm.
@@ -71,6 +71,7 @@ class REINFORCEAgent:
         # super().__init__(*args, **kwargs)
         self.state_dim = env.observation_space.high.size
         self.action_dim = env.action_space.high.size
+        self.min_action = min_action # all action values below (in abs values) this value will be set 0
         self.t_max = t_max
         self.α = alpha
         # self.α_this = self.α
@@ -103,7 +104,7 @@ class REINFORCEAgent:
         )
 
         # setting up the policy estimating network
-        self.policy_net = PolicyEstimatorNet(self.state_dim, self.action_dim, net = net, hidden_size = hidden_layer_size, n_hidden = n_hidden, clip_std = clip_std)
+        self.policy_net = PolicyEstimatorNet(self.state_dim, self.action_dim, net = net, hidden_size = hidden_layer_size, n_hidden = n_hidden)
         # print(self.policy_net)
         self.tb_log.add_graph(model = self.policy_net, input_to_model = torch.Tensor(self.env.reset()))
         self.tb_log.add_text("hparam/constants", json.dumps(vars(self.env.C), indent = 2), global_step = 0)
@@ -172,9 +173,17 @@ class REINFORCEAgent:
         """
         Predicts an action on a given state.
         """
-        mean, std = self.policy_net(state)
+        mean, std, activation = self.policy_net(state)
         e = torch.Tensor(np.random.normal(0, 1, self.action_dim))  # TODO: evtl detach()
-        action = mean + std * e
+        action = (mean + std * e)
+
+        # clipping small values to make it possible for the agent to do nothing
+        # This has to be done for positive and negative values separately (i guess?)
+        # it was difficut here to keep the torch gradients alive
+        action_pos = torch.clamp(action, min = self.min_action)
+        action_neg = torch.clamp(action, max = -self.min_action)
+        # The two tensors can then simply be added as they are disjunkt
+        action = action_pos + action_neg
         return action
 
     def get_nll(self, state, action):
